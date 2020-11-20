@@ -16,7 +16,7 @@ Example configuration:
          "pins": {
             "heater": 11,
             "sensor": 15
-         }
+         },
          "threshold": {
             "poor": 500,
             "inferior": 450,

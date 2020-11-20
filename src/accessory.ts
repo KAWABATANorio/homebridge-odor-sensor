@@ -27,8 +27,8 @@ class OderSensor implements AccessoryPlugin {
   private readonly log: Logging;
   private readonly name: string;
 
-  private initialized = false;
   private currentValue: number = 0;
+  private timer: any;
 
   private readonly airQualitySensorService: Service;
   private readonly informationService: Service;
@@ -73,33 +73,8 @@ class OderSensor implements AccessoryPlugin {
       .setCharacteristic(hap.Characteristic.Model, "TGS2450");
 
     this.spi = SPI.initialize(this.deviceFilePath);
-    this.spi.clockSpeed(1e6);
 
-    const i = setInterval(async () => {
-      if (!this.initialized) {
-        this.initialized = true;
-        await this.setupGpio(this.pins.heater, gpio.DIR_OUT);
-        await this.setupGpio(this.pins.sensor, gpio.DIR_OUT);
-      }
-
-      gpio.write(this.pins.sensor, true);
-      await this.sleep(3);
-      this.currentValue = await this.measure();
-      gpio.write(this.pins.sensor, false);
-
-      gpio.write(this.pins.heater, true);
-      await this.sleep(8);
-      gpio.write(this.pins.heater, false);
-    }, 250)
-
-    process.on('SIGINT', () => {
-      clearInterval(i);
-      this.spi.close(() => {});
-    });
-    process.on('beforeExit', () => {
-      clearInterval(i);
-      this.spi.close(() => {});
-    });
+    api.on('didFinishLaunching', this.accessoryMain).on('shutdown', this.shutdown);
 
     log.info("Irder sensor finished initializing!");
   }
@@ -123,32 +98,63 @@ class OderSensor implements AccessoryPlugin {
     ];
   }
 
-  measure(): Promise<number> {
+  private async accessoryMain(): Promise<void> {
+    this.spi.clockSpeed(1e6);
+
+    await this.setupGpio(this.pins.heater, gpio.DIR_OUT);
+    await this.setupGpio(this.pins.sensor, gpio.DIR_OUT);
+
+    this.timer = setInterval(async () => {
+      gpio.write(this.pins.sensor, true);
+      await this.sleep(3);
+      this.currentValue = await this.measure();
+      gpio.write(this.pins.sensor, false);
+
+      gpio.write(this.pins.heater, true);
+      await this.sleep(8);
+      gpio.write(this.pins.heater, false);
+    }, 250);
+  }
+
+  private shutdown(): void {
+    clearInterval(this.timer);
+    this.spi.close(() => {});
+  }
+
+  private async measure(): Promise<number> {
+    const buf = Buffer.alloc(2);
+    buf[0] = this.start + this.sgl + this.msbf;
+    buf[1] = this.dummy;
+
+    const data = await this.transfer(buf);
+    const val = 1023 - (((data[0] & 0x03) << 8) + data[1]);
+
+    let result = hap.Characteristic.AirQuality.UNKNOWN;
+    if (val > this.threshold.poor) {
+      result = hap.Characteristic.AirQuality.POOR
+    } else if (val > this.threshold.inferior) {
+      result = hap.Characteristic.AirQuality.INFERIOR
+    } else if (val > this.threshold.fair) {
+      result = hap.Characteristic.AirQuality.FAIR
+    } else if (val > this.threshold.good) {
+      result = hap.Characteristic.AirQuality.GOOD
+    } else if (val > this.threshold.excellent) {
+      result = hap.Characteristic.AirQuality.EXCELLENT
+    }
+
+    this.log(`sensor value: ${val}`);
+    return result;
+  }
+
+  private transfer(buf: Buffer): Promise<Buffer> {
     return new Promise((resolve) => {
-      const buf = Buffer.alloc(2);
-      buf[0] = this.start + this.sgl + this.msbf;
-      buf[1] = this.dummy;
       this.spi.transfer(buf, buf.length, (err: any, data: Buffer) => {
-        const val = 1023 - (((data[0] & 0x03) << 8) + data[1]);
-        let result = hap.Characteristic.AirQuality.UNKNOWN;
-        if (val > this.threshold.poor) {
-          result = hap.Characteristic.AirQuality.POOR
-        } else if (val > this.threshold.inferior) {
-          result = hap.Characteristic.AirQuality.INFERIOR
-        } else if (val > this.threshold.fair) {
-          result = hap.Characteristic.AirQuality.FAIR
-        } else if (val > this.threshold.good) {
-          result = hap.Characteristic.AirQuality.GOOD
-        } else if (val > this.threshold.excellent) {
-          result = hap.Characteristic.AirQuality.EXCELLENT
-        }
-        this.log(`sensor value: ${val}`);
-        resolve(result);
+        resolve(data);
       });
     });
   }
 
-  setupGpio(pin: number, inout: any): Promise<any> {
+  private setupGpio(pin: number, inout: any): Promise<void> {
     return new Promise((resolve) => {
       gpio.setup(pin, inout, () => {
         resolve();
@@ -156,7 +162,7 @@ class OderSensor implements AccessoryPlugin {
     });
   }
 
-  sleep(timeout: number): Promise<any> {
+  private sleep(timeout: number): Promise<void> {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve();
