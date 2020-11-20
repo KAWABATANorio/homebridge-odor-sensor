@@ -146,7 +146,7 @@ class OderSensor implements AccessoryPlugin {
       result = hap.Characteristic.AirQuality.EXCELLENT
     }
 
-    this.log(`sensor value: ${val}`);
+    this.log.debug(`sensor value: ${val}`);
     return result;
   }
 
