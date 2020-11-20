@@ -74,7 +74,11 @@ class OderSensor implements AccessoryPlugin {
 
     this.spi = SPI.initialize(this.deviceFilePath);
 
-    api.on('didFinishLaunching', this.accessoryMain).on('shutdown', this.shutdown);
+    api.on('didFinishLaunching', () => {
+      this.accessoryMain();
+    }).on('shutdown', () => {
+      this.shutdown();
+    });
 
     log.info("Irder sensor finished initializing!");
   }
