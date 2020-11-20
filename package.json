@@ -1,6 +1,6 @@
 {
   "name": "homebridge-odor-sensor",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "An odor sensor accessory plugin for homebridge",
   "main": "dist/accessory.js",
   "scripts": {
@@ -36,8 +36,10 @@
     "homebridge": "^1.0.4"
   },
   "dependencies": {
+    "@types/lodash": "^4.14.165",
     "@types/pi-spi": "0.0.28",
     "@types/rpi-gpio": "^2.1.1",
+    "lodash": "^4.17.20",
     "pi-spi": "^1.2.1",
     "rpi-gpio": "^2.1.7"
   }
