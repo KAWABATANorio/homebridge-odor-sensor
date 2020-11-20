@@ -1,6 +1,6 @@
 {
   "name": "homebridge-odor-sensor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "An odor sensor accessory plugin for homebridge",
   "main": "dist/accessory.js",
   "scripts": {
