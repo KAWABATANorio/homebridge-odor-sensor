@@ -111,10 +111,21 @@ class OderSensor implements AccessoryPlugin {
       buf[0] = this.start + this.sgl + this.msbf;
       buf[1] = this.dummy;
       this.spi.transfer(buf, buf.length, (err: any, data: Buffer) => {
-        //console.log('transfer return : ', data);
-        const val = ((data[0] & 0x03) << 8) + data[1];
-        //console.log(new Date().toLocaleString(), data[0], data[1], 1023 - val);
-        resolve(1023 - val);
+        const val = 1023 - (((data[0] & 0x03) << 8) + data[1]);
+        let result = hap.Characteristic.AirQuality.UNKNOWN;
+        if (val > 500) {
+          result = hap.Characteristic.AirQuality.POOR
+        } else if (val > 450) {
+          result = hap.Characteristic.AirQuality.INFERIOR
+        } else if (val > 400) {
+          result = hap.Characteristic.AirQuality.FAIR
+        } else if (val > 350) {
+          result = hap.Characteristic.AirQuality.GOOD
+        } else if (val > 250) {
+          result = hap.Characteristic.AirQuality.EXCELLENT
+        }
+        this.log(`sensor value: ${val}`);
+        resolve(result);
       });
     });
   }
