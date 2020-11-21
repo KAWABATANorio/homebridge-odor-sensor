@@ -64,8 +64,21 @@ class OderSensor implements AccessoryPlugin {
     this.airQualitySensorService = new hap.Service.AirQualitySensor(this.name);
     this.airQualitySensorService.getCharacteristic(hap.Characteristic.AirQuality)
       .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-        log.info("Current state of the sensor was returned: " + this.currentValue);
-        callback(undefined, this.currentValue);
+        const val = this.currentValue
+        let result = hap.Characteristic.AirQuality.UNKNOWN;
+        if (val > this.threshold.poor) {
+          result = hap.Characteristic.AirQuality.POOR
+        } else if (val > this.threshold.inferior) {
+          result = hap.Characteristic.AirQuality.INFERIOR
+        } else if (val > this.threshold.fair) {
+          result = hap.Characteristic.AirQuality.FAIR
+        } else if (val > this.threshold.good) {
+          result = hap.Characteristic.AirQuality.GOOD
+        } else if (val > this.threshold.excellent) {
+          result = hap.Characteristic.AirQuality.EXCELLENT
+        }
+        log.info(`Current state of the sensor was returned: ${result}, sensor value: ${val}`);
+        callback(undefined, result);
       })
 
     this.informationService = new hap.Service.AccessoryInformation()
@@ -133,21 +146,8 @@ class OderSensor implements AccessoryPlugin {
     const data = await this.transfer(buf);
     const val = 1023 - (((data[0] & 0x03) << 8) + data[1]);
 
-    let result = hap.Characteristic.AirQuality.UNKNOWN;
-    if (val > this.threshold.poor) {
-      result = hap.Characteristic.AirQuality.POOR
-    } else if (val > this.threshold.inferior) {
-      result = hap.Characteristic.AirQuality.INFERIOR
-    } else if (val > this.threshold.fair) {
-      result = hap.Characteristic.AirQuality.FAIR
-    } else if (val > this.threshold.good) {
-      result = hap.Characteristic.AirQuality.GOOD
-    } else if (val > this.threshold.excellent) {
-      result = hap.Characteristic.AirQuality.EXCELLENT
-    }
-
     this.log.debug(`sensor value: ${val}`);
-    return result;
+    return val;
   }
 
   private transfer(buf: Buffer): Promise<Buffer> {
