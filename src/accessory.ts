@@ -28,12 +28,12 @@ class OderSensor implements AccessoryPlugin {
   private readonly name: string;
 
   private currentValue: number = 0;
+  private currentStatus = hap.Characteristic.AirQuality.UNKNOWN;
   private timer: any;
 
   private readonly airQualitySensorService: Service;
   private readonly informationService: Service;
 
-  private readonly deviceFilePath: string;
   private readonly pins: any;
   private readonly threshold: any;
 
@@ -48,7 +48,6 @@ class OderSensor implements AccessoryPlugin {
     this.log = log;
     this.name = config.name;
 
-    this.deviceFilePath = `/dev/spidev${config.options.spidev || "0.0"}`
     this.threshold = _.defaults({}, config.options.threshold, {
       poor: 500,
       inferior: 450,
@@ -61,31 +60,21 @@ class OderSensor implements AccessoryPlugin {
       sensor: 15
     });
 
+    const deviceFilePath = `/dev/spidev${config.options.spidev || "0.0"}`
+    this.spi = SPI.initialize(deviceFilePath);
+
     this.airQualitySensorService = new hap.Service.AirQualitySensor(this.name);
     this.airQualitySensorService.getCharacteristic(hap.Characteristic.AirQuality)
       .on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-        const val = this.currentValue
-        let result = hap.Characteristic.AirQuality.UNKNOWN;
-        if (val > this.threshold.poor) {
-          result = hap.Characteristic.AirQuality.POOR
-        } else if (val > this.threshold.inferior) {
-          result = hap.Characteristic.AirQuality.INFERIOR
-        } else if (val > this.threshold.fair) {
-          result = hap.Characteristic.AirQuality.FAIR
-        } else if (val > this.threshold.good) {
-          result = hap.Characteristic.AirQuality.GOOD
-        } else if (val > this.threshold.excellent) {
-          result = hap.Characteristic.AirQuality.EXCELLENT
-        }
-        log.info(`Current state of the sensor was returned: ${result}, sensor value: ${val}`);
+        const value = this.currentValue;
+        const result = this.valueToStatus(value);
+        log.info(`Current state of the sensor was returned: ${result}, sensor value: ${value}`);
         callback(undefined, result);
-      })
+      });
 
     this.informationService = new hap.Service.AccessoryInformation()
       .setCharacteristic(hap.Characteristic.Manufacturer, "Kawabata Farm")
       .setCharacteristic(hap.Characteristic.Model, "TGS2450");
-
-    this.spi = SPI.initialize(this.deviceFilePath);
 
     api.on('didFinishLaunching', () => {
       this.accessoryMain();
@@ -93,7 +82,7 @@ class OderSensor implements AccessoryPlugin {
       this.shutdown();
     });
 
-    log.info("Irder sensor finished initializing!");
+    log.info("Odor sensor finished initializing!");
   }
 
   /*
@@ -127,6 +116,14 @@ class OderSensor implements AccessoryPlugin {
       this.currentValue = await this.measure();
       gpio.write(this.pins.sensor, false);
 
+      const status = this.valueToStatus(this.currentValue);
+      if (status != this.currentStatus) {
+        this.currentStatus = status;
+        this.log.info("status changed");
+        this.airQualitySensorService.getCharacteristic(hap.Characteristic.AirQuality)
+          .emit(CharacteristicEventTypes.GET, () => {});
+      }
+
       gpio.write(this.pins.heater, true);
       await this.sleep(8);
       gpio.write(this.pins.heater, false);
@@ -158,6 +155,22 @@ class OderSensor implements AccessoryPlugin {
     });
   }
 
+  private valueToStatus(value: number): number {
+    let result = hap.Characteristic.AirQuality.UNKNOWN;
+    if (value > this.threshold.poor) {
+      result = hap.Characteristic.AirQuality.POOR
+    } else if (value > this.threshold.inferior) {
+      result = hap.Characteristic.AirQuality.INFERIOR
+    } else if (value > this.threshold.fair) {
+      result = hap.Characteristic.AirQuality.FAIR
+    } else if (value > this.threshold.good) {
+      result = hap.Characteristic.AirQuality.GOOD
+    } else if (value > this.threshold.excellent) {
+      result = hap.Characteristic.AirQuality.EXCELLENT
+    }
+    return result;
+  }
+
   private setupGpio(pin: number, inout: any): Promise<void> {
     return new Promise((resolve) => {
       gpio.setup(pin, inout, () => {
@@ -172,6 +185,6 @@ class OderSensor implements AccessoryPlugin {
         resolve();
       }, timeout);
     });
-  };
+  }
 
 }
