@@ -43,6 +43,7 @@ class OderSensor implements AccessoryPlugin {
   private readonly msbf = 0x08;
 
   private readonly spi: SPI.SPI;
+  private readonly buf: Buffer;
 
   constructor(log: Logging, config: AccessoryConfig, api: API) {
     this.log = log;
@@ -62,6 +63,7 @@ class OderSensor implements AccessoryPlugin {
 
     const deviceFilePath = `/dev/spidev${config.options.spidev || "0.0"}`
     this.spi = SPI.initialize(deviceFilePath);
+    this.buf = Buffer.alloc(2);
 
     this.airQualitySensorService = new hap.Service.AirQualitySensor(this.name);
     this.airQualitySensorService.getCharacteristic(hap.Characteristic.AirQuality)
@@ -132,15 +134,16 @@ class OderSensor implements AccessoryPlugin {
 
   private shutdown(): void {
     clearInterval(this.timer);
-    this.spi.close(() => {});
+    this.spi.close(() => {
+      this.log.info('spi closed');
+    });
   }
 
   private async measure(): Promise<number> {
-    const buf = Buffer.alloc(2);
-    buf[0] = this.start + this.sgl + this.msbf;
-    buf[1] = this.dummy;
+    this.buf[0] = this.start + this.sgl + this.msbf;
+    this.buf[1] = this.dummy;
 
-    const data = await this.transfer(buf);
+    const data = await this.transfer(this.buf);
     const val = 1023 - (((data[0] & 0x03) << 8) + data[1]);
 
     this.log.debug(`sensor value: ${val}`);
@@ -148,9 +151,13 @@ class OderSensor implements AccessoryPlugin {
   }
 
   private transfer(buf: Buffer): Promise<Buffer> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.spi.transfer(buf, buf.length, (err: any, data: Buffer) => {
-        resolve(data);
+        if (err) {
+          reject(err);
+        } else {
+          resolve(data);
+        }
       });
     });
   }
@@ -172,9 +179,13 @@ class OderSensor implements AccessoryPlugin {
   }
 
   private setupGpio(pin: number, inout: any): Promise<void> {
-    return new Promise((resolve) => {
-      gpio.setup(pin, inout, () => {
-        resolve();
+    return new Promise((resolve, reject) => {
+      gpio.setup(pin, inout, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
       });
     });
   }
