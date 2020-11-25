@@ -116,6 +116,7 @@ class OderSensor implements AccessoryPlugin {
       gpio.write(this.pins.sensor, true);
       await this.sleep(3);
       this.currentValue = await this.measure();
+      await this.sleep(2);
       gpio.write(this.pins.sensor, false);
 
       const status = this.valueToStatus(this.currentValue);
@@ -126,10 +127,12 @@ class OderSensor implements AccessoryPlugin {
           .emit(CharacteristicEventTypes.GET, () => {});
       }
 
+      await this.sleep(245);
+
       gpio.write(this.pins.heater, true);
       await this.sleep(8);
       gpio.write(this.pins.heater, false);
-    }, 250);
+    }, 500);
   }
 
   private shutdown(): void {
